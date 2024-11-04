@@ -8,70 +8,90 @@ import {
   Param,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { CollectionsService } from './collections.service';
 import { CreateCollectionDto, UpdateCollectionDto } from './dto/Collection.dto';
 import { JwtAuthGuard } from '@api-server/auth/jwt/jwt.guard';
-import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { CollectionFields } from './models/Collection.model';
+import { CollectionHierarchyService } from './services/hierarchy.service';
+import {
+  ApiCreateCollection,
+  ApiDeleteCollection,
+  ApiGetCollection,
+  ApiGetCollections,
+  ApiGetSubcollections,
+  ApiMoveCollection,
+  ApiUpdateCollection,
+} from './swagger.decorators';
 
 @ApiTags('content-manager/collections')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller('content-manager/collections')
 export class CollectionsController {
-  constructor(private readonly collectionsService: CollectionsService) {}
+  constructor(
+    private readonly collectionsService: CollectionsService,
+    private readonly hierarchyService: CollectionHierarchyService,
+  ) {}
 
-  @ApiOperation({ summary: 'Create a new collection' })
-  @ApiResponse({
-    status: 201,
-    description: 'The collection has been successfully created',
-    type: CreateCollectionDto,
-  })
   @Post()
+  @ApiCreateCollection()
   async create(
     @Body() createCollectionDto: CreateCollectionDto,
   ): Promise<CollectionFields> {
+    // If parentId is provided, validate and update the slug
+    if (createCollectionDto.parentId !== undefined) {
+      createCollectionDto.slug =
+        await this.hierarchyService.validateHierarchicalSlug(
+          createCollectionDto.parentId,
+          createCollectionDto.slug,
+        );
+    }
+
     return this.collectionsService.create(createCollectionDto);
   }
 
-  @ApiOperation({ summary: 'Get all collections' })
-  @ApiResponse({
-    status: 200,
-    description: 'List of all collections',
-    type: [CreateCollectionDto],
-  })
   @Get()
-  async findAll(): Promise<CollectionFields[]> {
+  @ApiGetCollections()
+  async findAll(
+    @Query('hierarchical') hierarchical?: boolean,
+  ): Promise<CollectionFields[]> {
+    if (hierarchical) {
+      return this.hierarchyService.getCollectionHierarchy();
+    }
     return this.collectionsService.findAll();
   }
 
-  @ApiOperation({ summary: 'Get collection by documentId' })
-  @ApiResponse({
-    status: 200,
-    description: 'The found collection',
-    type: CreateCollectionDto,
-  })
+  @Get(':id/subcollections')
+  @ApiGetSubcollections()
+  async getSubcollections(
+    @Param('id') id: string,
+  ): Promise<CollectionFields[]> {
+    return this.hierarchyService.getSubcollections(parseInt(id, 10));
+  }
+
+  @Put(':id/move')
+  @ApiMoveCollection()
+  async moveCollection(
+    @Param('id') id: string,
+    @Body('newParentId') newParentId: number | null,
+  ): Promise<void> {
+    await this.hierarchyService.moveCollection(parseInt(id, 10), newParentId);
+  }
+
   @Get(':documentId')
+  @ApiGetCollection()
   async findOne(
     @Param('documentId') documentId: string,
   ): Promise<CollectionFields> {
     return this.collectionsService.findByDocumentId(documentId);
   }
 
-  @ApiOperation({ summary: 'Update collection by documentId' })
-  @ApiResponse({
-    status: 200,
-    description: 'The collection has been successfully updated',
-    type: UpdateCollectionDto,
-  })
   @Put(':documentId')
+  @ApiUpdateCollection()
   async update(
     @Param('documentId') documentId: string,
     @Body() updateCollectionDto: UpdateCollectionDto,
@@ -81,12 +101,8 @@ export class CollectionsController {
     return this.collectionsService.update(collection.id, updateCollectionDto);
   }
 
-  @ApiOperation({ summary: 'Delete collection by documentId' })
-  @ApiResponse({
-    status: 204,
-    description: 'The collection has been successfully deleted',
-  })
   @Delete(':documentId')
+  @ApiDeleteCollection()
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(@Param('documentId') documentId: string): Promise<void> {
     const collection =

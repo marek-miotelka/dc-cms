@@ -8,125 +8,108 @@ import {
   Param,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { CollectionsService } from './collections.service';
 import { JwtAuthGuard } from '@api-server/auth/jwt/jwt.guard';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { CollectionRecordsService } from './services/records.service';
+import { CollectionNotFoundException } from './exceptions/collection.exceptions';
 import {
-  ApiBearerAuth,
-  ApiOperation,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+  ApiCreateRecord,
+  ApiDeleteRecord,
+  ApiGetRecord,
+  ApiGetRecords,
+  ApiUpdateRecord,
+} from './swagger.decorators';
 
 @ApiTags('dynamic-collections')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
 @Controller()
 export class DynamicCollectionsController {
-  constructor(private readonly collectionsService: CollectionsService) {}
+  constructor(
+    private readonly collectionsService: CollectionsService,
+    private readonly recordsService: CollectionRecordsService,
+  ) {}
 
-  @ApiOperation({ summary: 'Get all records from a collection' })
-  @ApiResponse({
-    status: 200,
-    description: 'List of all records in the collection',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Collection not found',
-  })
   @Get(':collectionSlug')
-  async findAll(@Param('collectionSlug') slug: string): Promise<any[]> {
-    return this.collectionsService.getCollectionData(slug);
+  @ApiGetRecords()
+  async findAll(
+    @Param('collectionSlug') slug: string,
+    @Query('includeRelations') includeRelations?: boolean,
+  ): Promise<any[]> {
+    const collection = await this.collectionsService.findBySlug(slug);
+    if (!collection) {
+      throw new CollectionNotFoundException(slug);
+    }
+    return this.recordsService.getCollectionRecords(
+      collection,
+      includeRelations,
+    );
   }
 
-  @ApiOperation({ summary: 'Get a record by documentId' })
-  @ApiResponse({
-    status: 200,
-    description: 'The found record',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Collection or record not found',
-  })
   @Get(':collectionSlug/:documentId')
+  @ApiGetRecord()
   async findOne(
     @Param('collectionSlug') slug: string,
     @Param('documentId') documentId: string,
+    @Query('includeRelations') includeRelations?: boolean,
   ): Promise<any> {
-    return this.collectionsService.getCollectionRecord(slug, documentId);
+    const collection = await this.collectionsService.findBySlug(slug);
+    if (!collection) {
+      throw new CollectionNotFoundException(slug);
+    }
+    return this.recordsService.getCollectionRecord(
+      collection,
+      documentId,
+      includeRelations,
+    );
   }
 
-  @ApiOperation({ summary: 'Create a new record' })
-  @ApiResponse({
-    status: 201,
-    description: 'The record has been successfully created',
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Invalid field value or missing required field',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Collection not found',
-  })
-  @ApiResponse({
-    status: 409,
-    description: 'Duplicate value for unique field',
-  })
   @Post(':collectionSlug')
+  @ApiCreateRecord()
   async create(
     @Param('collectionSlug') slug: string,
-    @Body() createDto: any,
+    @Body() createDto: { data: any; relations?: Record<string, string[]> },
   ): Promise<any> {
-    return this.collectionsService.createCollectionRecord(slug, createDto);
+    const collection = await this.collectionsService.findBySlug(slug);
+    if (!collection) {
+      throw new CollectionNotFoundException(slug);
+    }
+    return this.recordsService.createCollectionRecord(collection, createDto);
   }
 
-  @ApiOperation({ summary: 'Update a record' })
-  @ApiResponse({
-    status: 200,
-    description: 'The record has been successfully updated',
-  })
-  @ApiResponse({
-    status: 400,
-    description: 'Invalid field value',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Collection or record not found',
-  })
-  @ApiResponse({
-    status: 409,
-    description: 'Duplicate value for unique field',
-  })
   @Put(':collectionSlug/:documentId')
+  @ApiUpdateRecord()
   async update(
     @Param('collectionSlug') slug: string,
     @Param('documentId') documentId: string,
-    @Body() updateDto: any,
+    @Body() updateDto: { data: any; relations?: Record<string, string[]> },
   ): Promise<any> {
-    return this.collectionsService.updateCollectionRecord(
-      slug,
+    const collection = await this.collectionsService.findBySlug(slug);
+    if (!collection) {
+      throw new CollectionNotFoundException(slug);
+    }
+    return this.recordsService.updateCollectionRecord(
+      collection,
       documentId,
       updateDto,
     );
   }
 
-  @ApiOperation({ summary: 'Delete a record' })
-  @ApiResponse({
-    status: 204,
-    description: 'The record has been successfully deleted',
-  })
-  @ApiResponse({
-    status: 404,
-    description: 'Collection or record not found',
-  })
   @Delete(':collectionSlug/:documentId')
+  @ApiDeleteRecord()
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(
     @Param('collectionSlug') slug: string,
     @Param('documentId') documentId: string,
   ): Promise<void> {
-    await this.collectionsService.deleteCollectionRecord(slug, documentId);
+    const collection = await this.collectionsService.findBySlug(slug);
+    if (!collection) {
+      throw new CollectionNotFoundException(slug);
+    }
+    await this.recordsService.deleteCollectionRecord(collection, documentId);
   }
 }

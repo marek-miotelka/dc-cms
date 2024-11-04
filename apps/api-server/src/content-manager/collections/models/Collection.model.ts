@@ -1,6 +1,6 @@
 import { BaseModel, BaseModelFields } from '@api-server/database/base.model';
+import { v4 as uuidv4 } from 'uuid';
 import { Knex } from 'knex';
-import { CollectionFieldValidationException } from '../exceptions/collection.exceptions';
 
 export type FieldType =
   | 'string'
@@ -8,7 +8,20 @@ export type FieldType =
   | 'boolean'
   | 'number'
   | 'integer'
-  | 'date';
+  | 'date'
+  | 'relation';
+
+export type RelationType = 'oneToOne' | 'oneToMany' | 'manyToMany';
+
+export interface RelationConfig {
+  type: RelationType;
+  target: string; // Target collection slug
+  bidirectional: boolean;
+  inverseSide?: {
+    field: string;
+    displayField: string;
+  };
+}
 
 export interface CollectionField {
   name: string;
@@ -16,39 +29,32 @@ export interface CollectionField {
   required: boolean;
   unique: boolean;
   description?: string;
+  relation?: RelationConfig;
 }
 
 export interface CollectionFields extends BaseModelFields {
   name: string;
   slug: string;
   description?: string;
+  parentId?: number; // Reference to parent collection
   fields: CollectionField[];
 }
 
 export class CollectionModel extends BaseModel<CollectionFields> {
-  constructor(options: { tableName: string; knex: Knex }) {
-    super(options);
-  }
-
   generateCollectionRecordUuid(): string {
-    return this.generateUuid();
+    return uuidv4();
   }
 
-  override async findAll(): Promise<CollectionFields[]> {
+  async findAll(): Promise<CollectionFields[]> {
     const collections = await this.knex(this.tableName).select('*');
     return collections.map((collection) => this.parseFields(collection));
   }
 
-  override async findById(id: number): Promise<CollectionFields | null> {
-    const collection = await super.findById(id);
-    return collection ? this.parseFields(collection) : null;
-  }
-
-  override async findByDocumentId(
-    documentId: string,
-  ): Promise<CollectionFields | null> {
-    const collection = await super.findByDocumentId(documentId);
-    return collection ? this.parseFields(collection) : null;
+  async findByParentId(parentId: number | null): Promise<CollectionFields[]> {
+    const collections = await this.knex(this.tableName)
+      .where('parentId', parentId)
+      .select('*');
+    return collections.map((collection) => this.parseFields(collection));
   }
 
   async findBySlug(slug: string): Promise<CollectionFields | null> {
@@ -58,14 +64,19 @@ export class CollectionModel extends BaseModel<CollectionFields> {
     return collection ? this.parseFields(collection) : null;
   }
 
-  override async create(
-    data: Partial<CollectionFields>,
-  ): Promise<CollectionFields> {
+  async findById(id: number): Promise<CollectionFields | null> {
+    const collection = await super.findById(id);
+    return collection ? this.parseFields(collection) : null;
+  }
+
+  async findByDocumentId(documentId: string): Promise<CollectionFields | null> {
+    const collection = await super.findByDocumentId(documentId);
+    return collection ? this.parseFields(collection) : null;
+  }
+
+  async create(data: Partial<CollectionFields>): Promise<CollectionFields> {
     if (!data.fields || !Array.isArray(data.fields)) {
-      throw new CollectionFieldValidationException(
-        'Fields must be a valid array',
-        { fields: data.fields },
-      );
+      throw new Error('Fields must be a valid array');
     }
 
     const preparedData = {
@@ -74,7 +85,6 @@ export class CollectionModel extends BaseModel<CollectionFields> {
       ...this.getBaseFields(),
     };
 
-    // For MySQL, we need to insert first then fetch
     const [id] = await this.knex(this.tableName).insert(preparedData);
 
     const collection = await this.findById(id);
@@ -85,7 +95,7 @@ export class CollectionModel extends BaseModel<CollectionFields> {
     return collection;
   }
 
-  override async update(
+  async update(
     id: number,
     data: Partial<CollectionFields>,
   ): Promise<CollectionFields | null> {
@@ -100,11 +110,81 @@ export class CollectionModel extends BaseModel<CollectionFields> {
     return this.findById(id);
   }
 
+  async updateCollectionTable(
+    collection: CollectionFields,
+    oldFields: CollectionField[],
+  ): Promise<void> {
+    if (!collection?.fields || !Array.isArray(collection.fields)) {
+      throw new Error('Invalid collection fields');
+    }
+
+    const tableName = `cm_${collection.slug}`;
+
+    // Remove deleted fields
+    for (const oldField of oldFields) {
+      if (!oldField?.name) continue;
+
+      const fieldExists = collection.fields.find(
+        (field) => field?.name === oldField.name,
+      );
+      if (!fieldExists) {
+        await this.knex.schema.alterTable(tableName, (table) => {
+          table.dropColumn(oldField.name);
+        });
+      }
+    }
+
+    // Add new fields or modify existing ones
+    for (const field of collection.fields) {
+      if (!field?.name || !field?.type || field.type === 'relation') {
+        continue;
+      }
+
+      const oldField = oldFields.find((f) => f?.name === field.name);
+
+      if (!oldField || oldField.type !== field.type) {
+        // Add new field or modify existing one
+        await this.knex.schema.alterTable(tableName, (table) => {
+          let column: Knex.ColumnBuilder;
+
+          switch (field.type) {
+            case 'string':
+              column = table.string(field.name);
+              break;
+            case 'longtext':
+              column = table.text(field.name);
+              break;
+            case 'boolean':
+              column = table.boolean(field.name);
+              break;
+            case 'number':
+              column = table.float(field.name);
+              break;
+            case 'integer':
+              column = table.integer(field.name);
+              break;
+            case 'date':
+              column = table.datetime(field.name);
+              break;
+            default:
+              throw new Error(`Unsupported field type: ${field.type}`);
+          }
+
+          if (field.required) {
+            column.notNullable();
+          }
+
+          if (field.unique) {
+            column.unique();
+          }
+        });
+      }
+    }
+  }
+
   private parseFields(collection: any): CollectionFields {
     if (!collection) {
-      throw new CollectionFieldValidationException('Invalid collection data', {
-        collection,
-      });
+      throw new Error('Invalid collection data');
     }
 
     try {
@@ -115,20 +195,14 @@ export class CollectionModel extends BaseModel<CollectionFields> {
             ? JSON.parse(collection.fields)
             : collection.fields,
       };
-    } catch (error) {
-      throw new CollectionFieldValidationException(
-        'Failed to parse collection fields',
-        { fields: collection.fields, error: error.message },
-      );
+    } catch {
+      throw new Error('Failed to parse collection fields');
     }
   }
 
   async createCollectionTable(collection: CollectionFields): Promise<void> {
     if (!collection?.fields || !Array.isArray(collection.fields)) {
-      throw new CollectionFieldValidationException(
-        'Invalid collection fields',
-        { collection },
-      );
+      throw new Error('Invalid collection fields');
     }
 
     const tableName = `cm_${collection.slug}`;
@@ -144,13 +218,20 @@ export class CollectionModel extends BaseModel<CollectionFields> {
       table.timestamp('createdAt').notNullable().defaultTo(this.knex.fn.now());
       table.timestamp('updatedAt').notNullable().defaultTo(this.knex.fn.now());
 
+      // Add parent reference if this is a subcollection
+      if (collection.parentId) {
+        table.uuid('parentDocumentId').nullable();
+        table
+          .foreign('parentDocumentId')
+          .references('documentId')
+          .inTable(`cm_${collection.slug.split('/')[0]}`)
+          .onDelete('CASCADE');
+      }
+
       // Dynamic fields
-      collection.fields.forEach((field) => {
-        if (!field?.name || !field?.type) {
-          throw new CollectionFieldValidationException(
-            'Invalid field definition',
-            { field },
-          );
+      for (const field of collection.fields) {
+        if (field.type === 'relation') {
+          continue;
         }
 
         let column: Knex.ColumnBuilder;
@@ -175,10 +256,7 @@ export class CollectionModel extends BaseModel<CollectionFields> {
             column = table.datetime(field.name);
             break;
           default:
-            throw new CollectionFieldValidationException(
-              `Unsupported field type: ${field.type}`,
-              { field },
-            );
+            throw new Error(`Unsupported field type: ${field.type}`);
         }
 
         if (field.required) {
@@ -188,144 +266,8 @@ export class CollectionModel extends BaseModel<CollectionFields> {
         if (field.unique) {
           column.unique();
         }
-      });
+      }
     });
-  }
-
-  async updateCollectionTable(
-    collection: CollectionFields,
-    oldFields: CollectionField[],
-  ): Promise<void> {
-    if (!collection?.fields || !Array.isArray(collection.fields)) {
-      throw new CollectionFieldValidationException(
-        'Invalid collection fields',
-        { collection },
-      );
-    }
-
-    if (!oldFields || !Array.isArray(oldFields)) {
-      throw new CollectionFieldValidationException('Invalid old fields', {
-        oldFields,
-      });
-    }
-
-    const tableName = `cm_${collection.slug}`;
-
-    // Remove deleted fields
-    for (const oldField of oldFields) {
-      if (!oldField?.name) continue;
-
-      const fieldExists = collection.fields.find(
-        (field) => field?.name === oldField.name,
-      );
-      if (!fieldExists) {
-        await this.knex.schema.alterTable(tableName, (table) => {
-          table.dropColumn(oldField.name);
-        });
-      }
-    }
-
-    // Add new fields or modify existing ones
-    for (const field of collection.fields) {
-      if (!field?.name || !field?.type) {
-        throw new CollectionFieldValidationException(
-          'Invalid field definition',
-          { field },
-        );
-      }
-
-      const oldField = oldFields.find((f) => f?.name === field.name);
-
-      if (!oldField) {
-        // Add new field
-        await this.knex.schema.alterTable(tableName, (table) => {
-          let column: Knex.ColumnBuilder;
-
-          switch (field.type) {
-            case 'string':
-              column = table.string(field.name);
-              break;
-            case 'longtext':
-              column = table.text(field.name);
-              break;
-            case 'boolean':
-              column = table.boolean(field.name);
-              break;
-            case 'number':
-              column = table.float(field.name);
-              break;
-            case 'integer':
-              column = table.integer(field.name);
-              break;
-            case 'date':
-              column = table.datetime(field.name);
-              break;
-            default:
-              throw new CollectionFieldValidationException(
-                `Unsupported field type: ${field.type}`,
-                { field },
-              );
-          }
-
-          if (field.required) {
-            column.notNullable();
-          }
-
-          if (field.unique) {
-            column.unique();
-          }
-        });
-      } else if (
-        field.type !== oldField.type ||
-        field.required !== oldField.required ||
-        field.unique !== oldField.unique
-      ) {
-        // Modify existing field
-        await this.knex.schema.alterTable(tableName, (table) => {
-          // Drop existing column
-          table.dropColumn(field.name);
-        });
-
-        await this.knex.schema.alterTable(tableName, (table) => {
-          // Recreate column with new properties
-          let column: Knex.ColumnBuilder;
-
-          switch (field.type) {
-            case 'string':
-              column = table.string(field.name);
-              break;
-            case 'longtext':
-              column = table.text(field.name);
-              break;
-            case 'boolean':
-              column = table.boolean(field.name);
-              break;
-            case 'number':
-              column = table.float(field.name);
-              break;
-            case 'integer':
-              column = table.integer(field.name);
-              break;
-            case 'date':
-              column = table.datetime(field.name);
-              break;
-            default:
-              throw new CollectionFieldValidationException(
-                `Unsupported field type: ${field.type}`,
-                { field },
-              );
-          }
-
-          if (field.required) {
-            column.notNullable();
-          }
-
-          if (field.unique) {
-            column.unique();
-          }
-        });
-      }
-    }
   }
 
   async dropCollectionTable(slug: string): Promise<void> {

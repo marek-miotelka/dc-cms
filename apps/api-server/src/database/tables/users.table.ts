@@ -1,32 +1,18 @@
 import { Knex } from 'knex';
-import { Logger } from '@nestjs/common';
+import { BaseTable } from './base.table';
 
-export class UsersTable {
-  private readonly logger = new Logger(UsersTable.name);
-
-  constructor(
-    private readonly knex: Knex,
-    private readonly dbClient: string,
-  ) {}
+export class UsersTable extends BaseTable {
+  constructor(knex: Knex, dbClient: string) {
+    super(knex, dbClient, 'users');
+  }
 
   async createTable(): Promise<void> {
-    try {
-      const hasTable = await this.knex.schema.hasTable('users');
+    await this.createTableIfNotExists('users', (table) => {
+      this.addColumns(table);
+      this.addBaseIndexes(table);
+    });
 
-      if (!hasTable) {
-        this.logger.log('Creating users table...');
-        await this.knex.schema.createTable('users', (table) => {
-          this.addColumns(table);
-          this.addBaseIndexes(table);
-        });
-
-        await this.addClientSpecificIndexes();
-        this.logger.log('Users table created successfully');
-      }
-    } catch (error) {
-      this.logger.error('Failed to create users table:', error.stack);
-      throw error;
-    }
+    await this.addProviderIdsIndex();
   }
 
   private addColumns(table: Knex.CreateTableBuilder): void {
@@ -47,10 +33,10 @@ export class UsersTable {
     table.index('username');
   }
 
-  private async addClientSpecificIndexes(): Promise<void> {
+  private async addProviderIdsIndex(): Promise<void> {
     if (this.dbClient === 'pg') {
       await this.knex.schema.raw(
-        'CREATE INDEX provider_ids_gin_idx ON users USING gin (provider_ids)',
+        'CREATE INDEX IF NOT EXISTS provider_ids_gin_idx ON users USING gin (provider_ids)',
       );
     } else {
       await this.knex.schema.raw(

@@ -23,28 +23,46 @@ export class DatabaseService implements OnModuleInit {
 
   private async initializeDatabase() {
     try {
-      this.logger.log('Initializing database tables...');
+      this.logger.log('Checking database tables...');
 
-      // Initialize tables
+      // Initialize tables in sequence to maintain dependencies
       const usersTable = new tables.UsersTable(this.knex, this.dbClient);
-      await usersTable.createTable();
-
-      const articlesTable = new tables.ArticlesTable(this.knex, this.dbClient);
-      await articlesTable.createTable();
-
       const rolesTable = new tables.RolesTable(this.knex, this.dbClient);
-      await rolesTable.createTable();
-
       const collectionsTable = new tables.CollectionsTable(
         this.knex,
         this.dbClient,
       );
-      await collectionsTable.createTable();
+
+      // Create tables in order
+      await this.createTableSafely('users', () => usersTable.createTable());
+      await this.createTableSafely('roles', () => rolesTable.createTable());
+      await this.createTableSafely('collections', () =>
+        collectionsTable.createTable(),
+      );
 
       this.logger.log('Database initialization completed successfully');
     } catch (error) {
       this.logger.error('Failed to initialize database:', error.stack);
       throw error;
+    }
+  }
+
+  private async createTableSafely(
+    tableName: string,
+    createFn: () => Promise<void>,
+  ): Promise<void> {
+    try {
+      const exists = await this.knex.schema.hasTable(tableName);
+      if (!exists) {
+        this.logger.log(`Creating table: ${tableName}`);
+        await createFn();
+        this.logger.log(`Table ${tableName} created successfully`);
+      } else {
+        this.logger.log(`Table ${tableName} already exists, skipping creation`);
+      }
+    } catch (error) {
+      // Log the error but don't throw, allowing other tables to be processed
+      this.logger.error(`Error handling table ${tableName}:`, error.stack);
     }
   }
 }

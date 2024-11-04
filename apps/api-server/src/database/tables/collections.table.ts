@@ -1,13 +1,10 @@
 import { Knex } from 'knex';
-import { Logger } from '@nestjs/common';
+import { BaseTable } from './base.table';
 
-export class CollectionsTable {
-  private readonly logger = new Logger(CollectionsTable.name);
-
-  constructor(
-    private readonly knex: Knex,
-    private readonly dbClient: string,
-  ) {}
+export class CollectionsTable extends BaseTable {
+  constructor(knex: Knex, dbClient: string) {
+    super(knex, dbClient, 'collections');
+  }
 
   async createTable(): Promise<void> {
     try {
@@ -19,8 +16,25 @@ export class CollectionsTable {
           this.addColumns(table);
           this.addBaseIndexes(table);
         });
-
         this.logger.log('Collections table created successfully');
+      } else {
+        // Check if parentId column exists and add it if it doesn't
+        const hasParentId = await this.knex.schema.hasColumn(
+          'collections',
+          'parentId',
+        );
+        if (!hasParentId) {
+          this.logger.log('Adding parentId column to collections table...');
+          await this.knex.schema.alterTable('collections', (table) => {
+            table.integer('parentId').unsigned().nullable();
+            table
+              .foreign('parentId')
+              .references('id')
+              .inTable('collections')
+              .onDelete('SET NULL');
+          });
+          this.logger.log('Added parentId column successfully');
+        }
       }
     } catch (error) {
       this.logger.error('Failed to create collections table:', error.stack);
@@ -35,12 +49,19 @@ export class CollectionsTable {
     table.string('slug').notNullable().unique();
     table.string('description').nullable();
     table.jsonb('fields').notNullable();
+    table.integer('parentId').unsigned().nullable();
+    table
+      .foreign('parentId')
+      .references('id')
+      .inTable('collections')
+      .onDelete('SET NULL');
     table.timestamp('createdAt').notNullable().defaultTo(this.knex.fn.now());
     table.timestamp('updatedAt').notNullable().defaultTo(this.knex.fn.now());
   }
 
   private addBaseIndexes(table: Knex.CreateTableBuilder): void {
     table.index('slug');
+    table.index('parentId');
   }
 
   async dropTable(): Promise<void> {

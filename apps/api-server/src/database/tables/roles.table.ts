@@ -1,32 +1,18 @@
 import { Knex } from 'knex';
-import { Logger } from '@nestjs/common';
+import { BaseTable } from './base.table';
 
-export class RolesTable {
-  private readonly logger = new Logger(RolesTable.name);
-
-  constructor(
-    private readonly knex: Knex,
-    private readonly dbClient: string,
-  ) {}
+export class RolesTable extends BaseTable {
+  constructor(knex: Knex, dbClient: string) {
+    super(knex, dbClient, 'roles');
+  }
 
   async createTable(): Promise<void> {
-    try {
-      const hasTable = await this.knex.schema.hasTable('roles');
+    await this.createTableIfNotExists('roles', (table) => {
+      this.addColumns(table);
+      this.addBaseIndexes(table);
+    });
 
-      if (!hasTable) {
-        this.logger.log('Creating roles table...');
-        await this.knex.schema.createTable('roles', (table) => {
-          this.addColumns(table);
-          this.addBaseIndexes(table);
-        });
-
-        await this.createUserRolesTable();
-        this.logger.log('Roles tables created successfully');
-      }
-    } catch (error) {
-      this.logger.error('Failed to create roles table:', error.stack);
-      throw error;
-    }
+    await this.createUserRolesTable();
   }
 
   private addColumns(table: Knex.CreateTableBuilder): void {
@@ -44,37 +30,26 @@ export class RolesTable {
   }
 
   private async createUserRolesTable(): Promise<void> {
-    const hasTable = await this.knex.schema.hasTable('user_roles');
+    await this.createTableIfNotExists('user_roles', (table) => {
+      table.increments('id').primary();
+      table.integer('userId').unsigned().notNullable();
+      table.integer('roleId').unsigned().notNullable();
+      table.timestamp('createdAt').notNullable().defaultTo(this.knex.fn.now());
+      table.timestamp('updatedAt').notNullable().defaultTo(this.knex.fn.now());
 
-    if (!hasTable) {
-      this.logger.log('Creating user_roles table...');
-      await this.knex.schema.createTable('user_roles', (table) => {
-        table.increments('id').primary();
-        table.integer('userId').unsigned().notNullable();
-        table.integer('roleId').unsigned().notNullable();
-        table
-          .timestamp('createdAt')
-          .notNullable()
-          .defaultTo(this.knex.fn.now());
-        table
-          .timestamp('updatedAt')
-          .notNullable()
-          .defaultTo(this.knex.fn.now());
+      table
+        .foreign('userId')
+        .references('id')
+        .inTable('users')
+        .onDelete('CASCADE');
+      table
+        .foreign('roleId')
+        .references('id')
+        .inTable('roles')
+        .onDelete('CASCADE');
 
-        table
-          .foreign('userId')
-          .references('id')
-          .inTable('users')
-          .onDelete('CASCADE');
-        table
-          .foreign('roleId')
-          .references('id')
-          .inTable('roles')
-          .onDelete('CASCADE');
-
-        table.unique(['userId', 'roleId']);
-      });
-    }
+      table.unique(['userId', 'roleId']);
+    });
   }
 
   async dropTable(): Promise<void> {
