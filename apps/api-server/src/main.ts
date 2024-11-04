@@ -1,10 +1,11 @@
-import { HttpAdapterHost, NestFactory } from '@nestjs/core';
+import { ValidationPipe } from '@nestjs/common';
 import { AppModule } from './app.module';
 import { ConfigService } from '@nestjs/config';
-import { ValidationPipe } from '@nestjs/common';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
-import { DynamicCollectionsSwaggerPlugin } from '@api-server/content-manager/collections/swagger/swagger.plugin';
+
+import { HttpAdapterHost, NestFactory } from '@nestjs/core';
+import { DynamicCollectionsSwaggerPlugin } from '@api-server/content-manager/swagger/swagger.plugin';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -30,7 +31,7 @@ async function bootstrap() {
 
   const configService = app.get(ConfigService);
 
-  // Setup dynamic collection documentation
+  // Setup Swagger documentation
   await DynamicCollectionsSwaggerPlugin.setup(app);
 
   await app.listen(

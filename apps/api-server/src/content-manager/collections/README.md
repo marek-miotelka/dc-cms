@@ -9,6 +9,8 @@ The Collections Module provides a flexible and powerful system for managing dyna
 - Custom field types
 - Bidirectional relationships
 - Dynamic record management
+- Advanced filtering and pagination
+- Dynamic Swagger documentation
 
 ## Table of Contents
 
@@ -18,8 +20,9 @@ The Collections Module provides a flexible and powerful system for managing dyna
 4. [Field Types](#field-types)
 5. [Relations](#relations)
 6. [Hierarchical Collections](#hierarchical-collections)
-7. [API Examples](#api-examples)
-8. [Programmatic Usage](#programmatic-usage)
+7. [Query System](#query-system)
+8. [API Documentation](#api-documentation)
+9. [Programmatic Usage](#programmatic-usage)
 
 ## Installation
 
@@ -194,81 +197,73 @@ Collections can be organized in a parent-child hierarchy, enabling structured co
 2. **Automatic References**: Child collections get a `parentDocumentId` column that references their parent collection's records
 
 3. **Querying Subcollections**:
-    - Get all subcollections: `GET /content-manager/collections/{parentId}/subcollections`
-    - Get hierarchical view: `GET /content-manager/collections?hierarchical=true`
+   - Get all subcollections: `GET /content-manager/collections/{parentId}/subcollections`
+   - Get hierarchical view: `GET /content-manager/collections?hierarchical=true`
 
 4. **Moving Collections**:
-    - Collections can be moved in the hierarchy using: `PUT /content-manager/collections/{id}/move`
-    - Provide a new `parentId` or `null` to move to root level
+   - Collections can be moved in the hierarchy using: `PUT /content-manager/collections/{id}/move`
+   - Provide a new `parentId` or `null` to move to root level
 
 5. **Validation**:
-    - Circular references are prevented
-    - Parent collection must exist
-    - Slug conflicts are checked across the hierarchy
+   - Circular references are prevented
+   - Parent collection must exist
+   - Slug conflicts are checked across the hierarchy
 
-## API Examples
+## Query System
 
-### Creating a Collection
+The module includes a powerful query system for filtering, sorting, and paginating records:
 
-```http
-POST /content-manager/collections
-Content-Type: application/json
+### Filtering
 
-{
-  "name": "Blog Posts",
-  "slug": "posts",
-  "fields": [
-    {
-      "name": "title",
-      "type": "string",
-      "required": true,
-      "unique": true
+```typescript
+const records = await collectionsService.getCollectionData(collection, {
+  filter: {
+    title: { like: 'blog' },
+    publishDate: { 
+      gte: '2024-01-01',
+      lte: '2024-12-31'
     },
-    {
-      "name": "content",
-      "type": "longtext",
-      "required": true
-    },
-    {
-      "name": "categories",
-      "type": "relation",
-      "required": false,
-      "relation": {
-        "type": "manyToMany",
-        "target": "categories",
-        "bidirectional": true,
-        "inverseSide": {
-          "field": "posts",
-          "displayField": "title"
-        }
-      }
-    }
-  ]
-}
-```
-
-### Creating Records
-
-```http
-POST /posts
-Content-Type: application/json
-
-{
-  "data": {
-    "title": "My First Post",
-    "content": "Hello World!"
-  },
-  "relations": {
-    "categories": ["category-1-id", "category-2-id"]
+    status: { in: ['published', 'draft'] }
   }
-}
+});
 ```
 
-### Querying Records with Relations
+### Sorting
 
-```http
-GET /posts?includeRelations=true
+```typescript
+const records = await collectionsService.getCollectionData(collection, {
+  sort: {
+    publishDate: 'desc',
+    title: 'asc'
+  }
+});
 ```
+
+### Pagination
+
+```typescript
+const records = await collectionsService.getCollectionData(collection, {
+  pagination: {
+    page: 1,
+    pageSize: 20
+  }
+});
+```
+
+## API Documentation
+
+The module provides dynamic Swagger documentation for all collections:
+
+1. **Main Documentation**: `/docs`
+   - Core API endpoints
+   - Authentication
+   - Collection management
+
+2. **Collections Documentation**: `/docs/collections`
+   - Dynamic endpoints for each collection
+   - CRUD operations
+   - Field-specific schemas
+   - Relation handling
 
 ## Programmatic Usage
 
@@ -279,6 +274,7 @@ import { CollectionsService } from './collections.service';
 import { CollectionRelationsService } from './services/relations.service';
 import { CollectionRecordsService } from './services/records.service';
 import { CollectionHierarchyService } from './services/hierarchy.service';
+import { CollectionQueryService } from './services/query/collection-query.service';
 
 @Injectable()
 export class YourService {
@@ -286,7 +282,8 @@ export class YourService {
     private readonly collectionsService: CollectionsService,
     private readonly relationsService: CollectionRelationsService,
     private readonly recordsService: CollectionRecordsService,
-    private readonly hierarchyService: CollectionHierarchyService
+    private readonly hierarchyService: CollectionHierarchyService,
+    private readonly queryService: CollectionQueryService
   ) {}
 }
 ```
@@ -319,49 +316,27 @@ const hierarchy = await this.hierarchyService.getCollectionHierarchy();
 ### Managing Records
 
 ```typescript
-// Create a record
-const record = await this.recordsService.createCollectionRecord(
+// Create a record with relations
+const record = await this.collectionsService.createCollectionRecord(
   collection,
   {
     title: "New Product",
     price: 99.99
-  }
-);
-
-// Update a record
-await this.recordsService.updateCollectionRecord(
-  collection,
-  record.documentId,
+  },
   {
-    price: 89.99
+    categories: ['category-1-id', 'category-2-id']
   }
 );
 
-// Delete a record
-await this.recordsService.deleteCollectionRecord(
+// Query records with filters and pagination
+const records = await this.collectionsService.getCollectionData(
   collection,
-  record.documentId
-);
-```
-
-### Managing Relations
-
-```typescript
-// Create a relation
-await this.relationsService.createRelation(
-  collection.slug,
-  "categories",
-  sourceId,
-  targetId,
-  "manyToMany"
-);
-
-// Get related records
-const related = await this.relationsService.getRelatedRecords(
-  collection.slug,
-  "categories",
-  sourceId,
-  "manyToMany"
+  {
+    filter: { price: { gte: 50 } },
+    sort: { createdAt: 'desc' },
+    pagination: { page: 1, pageSize: 20 },
+    includeRelations: true
+  }
 );
 ```
 
@@ -372,6 +347,8 @@ const related = await this.relationsService.getRelatedRecords(
 3. Handle relation cleanup when deleting records
 4. Use proper error handling for collection operations
 5. Implement proper access control for collection operations
+6. Use the query system for efficient data retrieval
+7. Leverage the hierarchical system for structured content
 
 ## Error Handling
 
@@ -381,6 +358,8 @@ The module provides specific exceptions for common errors:
 - `CollectionFieldValidationException`
 - `DuplicateFieldValueException`
 - `CollectionRecordNotFoundException`
+- `CollectionAlreadyExistsException`
+- `CollectionOperationException`
 
 Example:
 

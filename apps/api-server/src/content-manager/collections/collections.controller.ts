@@ -87,7 +87,12 @@ export class CollectionsController {
   async findOne(
     @Param('documentId') documentId: string,
   ): Promise<CollectionFields> {
-    return this.collectionsService.findByDocumentId(documentId);
+    const collection =
+      await this.collectionsService.findByDocumentId(documentId);
+    if (!collection) {
+      throw new Error(`Collection with documentId ${documentId} not found`);
+    }
+    return collection;
   }
 
   @Put(':documentId')
@@ -98,6 +103,22 @@ export class CollectionsController {
   ): Promise<CollectionFields> {
     const collection =
       await this.collectionsService.findByDocumentId(documentId);
+    if (!collection) {
+      throw new Error(`Collection with documentId ${documentId} not found`);
+    }
+
+    // If parentId is changing, validate and update the slug
+    if (
+      updateCollectionDto.parentId !== undefined &&
+      updateCollectionDto.parentId !== collection.parentId
+    ) {
+      updateCollectionDto.slug =
+        await this.hierarchyService.validateHierarchicalSlug(
+          updateCollectionDto.parentId,
+          updateCollectionDto.slug,
+        );
+    }
+
     return this.collectionsService.update(collection.id, updateCollectionDto);
   }
 
@@ -107,6 +128,9 @@ export class CollectionsController {
   async remove(@Param('documentId') documentId: string): Promise<void> {
     const collection =
       await this.collectionsService.findByDocumentId(documentId);
+    if (!collection) {
+      throw new Error(`Collection with documentId ${documentId} not found`);
+    }
     await this.collectionsService.delete(collection.id);
   }
 }
