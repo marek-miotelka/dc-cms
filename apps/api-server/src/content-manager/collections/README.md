@@ -17,8 +17,9 @@ The Collections Module provides a flexible and powerful system for managing dyna
 3. [Collection Structure](#collection-structure)
 4. [Field Types](#field-types)
 5. [Relations](#relations)
-6. [API Examples](#api-examples)
-7. [Programmatic Usage](#programmatic-usage)
+6. [Hierarchical Collections](#hierarchical-collections)
+7. [API Examples](#api-examples)
+8. [Programmatic Usage](#programmatic-usage)
 
 ## Installation
 
@@ -148,6 +149,63 @@ Available field types:
 }
 ```
 
+## Hierarchical Collections
+
+Collections can be organized in a parent-child hierarchy, enabling structured content organization.
+
+### Creating Parent-Child Collections
+
+1. First, create the parent collection:
+```json
+{
+  "name": "Products",
+  "slug": "products",
+  "fields": [
+    {
+      "name": "name",
+      "type": "string",
+      "required": true,
+      "unique": true
+    }
+  ]
+}
+```
+
+2. Then create a child collection by referencing the parent's ID:
+```json
+{
+  "name": "Product Variants",
+  "slug": "variants",
+  "parentId": 1,
+  "fields": [
+    {
+      "name": "size",
+      "type": "string",
+      "required": true
+    }
+  ]
+}
+```
+
+### Key Points About Hierarchical Collections
+
+1. **Automatic Slug Prefixing**: Child collection slugs are automatically prefixed with their parent's slug (e.g., "products/variants")
+
+2. **Automatic References**: Child collections get a `parentDocumentId` column that references their parent collection's records
+
+3. **Querying Subcollections**:
+    - Get all subcollections: `GET /content-manager/collections/{parentId}/subcollections`
+    - Get hierarchical view: `GET /content-manager/collections?hierarchical=true`
+
+4. **Moving Collections**:
+    - Collections can be moved in the hierarchy using: `PUT /content-manager/collections/{id}/move`
+    - Provide a new `parentId` or `null` to move to root level
+
+5. **Validation**:
+    - Circular references are prevented
+    - Parent collection must exist
+    - Slug conflicts are checked across the hierarchy
+
 ## API Examples
 
 ### Creating a Collection
@@ -220,13 +278,15 @@ GET /posts?includeRelations=true
 import { CollectionsService } from './collections.service';
 import { CollectionRelationsService } from './services/relations.service';
 import { CollectionRecordsService } from './services/records.service';
+import { CollectionHierarchyService } from './services/hierarchy.service';
 
 @Injectable()
 export class YourService {
   constructor(
     private readonly collectionsService: CollectionsService,
     private readonly relationsService: CollectionRelationsService,
-    private readonly recordsService: CollectionRecordsService
+    private readonly recordsService: CollectionRecordsService,
+    private readonly hierarchyService: CollectionHierarchyService
   ) {}
 }
 ```
@@ -241,13 +301,19 @@ const collection = await this.collectionsService.create({
   fields: [/* fields */]
 });
 
-// Update a collection
-await this.collectionsService.update(collection.id, {
-  fields: [/* updated fields */]
+// Create a child collection
+const childCollection = await this.collectionsService.create({
+  name: "Product Variants",
+  slug: "variants",
+  parentId: collection.id,
+  fields: [/* fields */]
 });
 
-// Delete a collection
-await this.collectionsService.delete(collection.id);
+// Move a collection in hierarchy
+await this.hierarchyService.moveCollection(childCollection.id, newParentId);
+
+// Get collection hierarchy
+const hierarchy = await this.hierarchyService.getCollectionHierarchy();
 ```
 
 ### Managing Records

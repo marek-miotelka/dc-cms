@@ -16,18 +16,19 @@ export class CollectionsService
   extends CrudService<CollectionFields>
   implements OnModuleInit
 {
-  private collectionModel!: CollectionModel;
+  private collectionModel: CollectionModel;
 
   constructor(@Inject('KNEX_CONNECTION') private readonly knex: Knex) {
     super();
-  }
-
-  onModuleInit() {
     this.collectionModel = new CollectionModel({
       tableName: 'collections',
       knex: this.knex,
     });
     this.setModel(this.collectionModel);
+  }
+
+  onModuleInit() {
+    // No need to initialize here anymore since we do it in constructor
   }
 
   async findAll(): Promise<CollectionFields[]> {
