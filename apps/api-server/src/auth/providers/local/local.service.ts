@@ -1,11 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { AdminUsersService } from '@api-server/admin/users/users.service';
 import { AuthJwtService } from '@api-server/auth/jwt/jwt.service';
-import {
-  AuthJwtUser,
-  AuthSignJwtResponse,
-} from '@api-server/auth/jwt/models/AuthJwt.model';
+import { AuthJwtUser, AuthSignJwtResponse } from '@api-server/auth/jwt/models/AuthJwt.model';
 
+/**
+ * Service handling username/password authentication
+ * Manages user validation and JWT token generation
+ */
 @Injectable()
 export class LocalStrategyService {
   constructor(
@@ -13,17 +14,27 @@ export class LocalStrategyService {
     private readonly authJwtService: AuthJwtService,
   ) {}
 
-  async validateUser(
-    identifier: string,
-    password: string,
-  ): Promise<AuthJwtUser | null> {
+  /**
+   * Validate user credentials
+   * @param identifier - Username or email
+   * @param password - User's password
+   * @returns JWT user payload or null if validation fails
+   */
+  async validateUser(identifier: string, password: string): Promise<AuthJwtUser | null> {
     const user = await this.usersService.findOne(identifier);
 
-    if (user?.password !== password) {
-      return null;
+    if (!user?.password) {
+      throw new UnauthorizedException('Invalid credentials');
     }
 
-    console.log('VALIDATE USER', user);
+    const isPasswordValid = await this.usersService.validatePassword(
+      password,
+      user.password,
+    );
+
+    if (!isPasswordValid) {
+      return null;
+    }
 
     return {
       id: user.id,
@@ -32,6 +43,11 @@ export class LocalStrategyService {
     };
   }
 
+  /**
+   * Generate JWT token for authenticated user
+   * @param payload - Validated user data
+   * @returns JWT token and user information
+   */
   async signIn(payload: AuthJwtUser): Promise<AuthSignJwtResponse> {
     return this.authJwtService.sign(payload);
   }

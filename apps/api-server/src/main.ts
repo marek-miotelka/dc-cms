@@ -13,18 +13,24 @@ async function bootstrap() {
 
   const config = new DocumentBuilder()
     .setTitle('Distcode CMS')
-    .setDescription('The Distcode CMS API endpoints')
+    .setDescription('The Distcode CMS API documentation')
     .setVersion('1.0')
+    .addTag('auth', 'Authentication endpoints')
+    .addTag('auth/local', 'Local authentication (username/password)')
+    .addTag('auth/google', 'Google OAuth2 authentication')
+    .addBearerAuth()
     .build();
-  const documentFactory = () => SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('docs', app, documentFactory);
+
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('docs', app, document);
 
   await app.listen(
-    configService.get<number>('app.PORT', { infer: true }),
-    configService.get<number>('app.HOST', { infer: true }),
+    configService.getOrThrow<number>('app.PORT', { infer: true }),
+    configService.getOrThrow<string>('app.HOST', { infer: true }),
   );
 
-  console.log(await app.getUrl());
+  console.log(`Application is running on: ${await app.getUrl()}`);
+  console.log(`API documentation available at: ${await app.getUrl()}/docs`);
 }
 
 bootstrap();

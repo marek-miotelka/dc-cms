@@ -6,13 +6,14 @@ import { AuthModule } from './auth/auth.module';
 import { AdminModule } from './admin/admin.module';
 import appConfig from '@api-server/config/app.config';
 import jwtConfig from '@api-server/config/jwt.config';
+import providersConfig from '@api-server/config/providers.config';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       cache: true,
-      load: [appConfig, jwtConfig],
+      load: [appConfig, jwtConfig, providersConfig],
     }),
     AuthModule,
     AdminModule,
