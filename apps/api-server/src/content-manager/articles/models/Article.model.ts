@@ -1,35 +1,38 @@
 import { BaseModel, BaseModelFields } from '@api-server/database/base.model';
 
-/**
- * Interface representing the fields of an Article entity
- * @extends BaseModelFields - Includes base fields like id, documentId, createdAt, updatedAt
- */
 export interface ArticleFields extends BaseModelFields {
-  /** The title or name of the article */
   name: string;
-  /** The main content or description of the article */
   description: string;
 }
 
-/**
- * Model class for handling Article-specific database operations
- * @extends BaseModel - Provides base CRUD operations
- */
-export class ArticleModel extends BaseModel {
-  /**
-   * Retrieves all articles from the database
-   * @returns Promise resolving to an array of ArticleFields
-   */
+export class ArticleModel extends BaseModel<ArticleFields> {
   async findAll(): Promise<ArticleFields[]> {
     return this.knex(this.tableName).select('*');
   }
 
-  /**
-   * Finds an article by its name
-   * @param name - The name/title of the article to find
-   * @returns Promise resolving to ArticleFields if found, null otherwise
-   */
   async findByName(name: string): Promise<ArticleFields | null> {
-    return this.knex(this.tableName).where('name', name).first();
+    const result = await this.knex(this.tableName).where('name', name).first();
+    return result || null;
+  }
+
+  override async findById(id: number): Promise<ArticleFields | null> {
+    return super.findById(id);
+  }
+
+  override async findByDocumentId(
+    documentId: string,
+  ): Promise<ArticleFields | null> {
+    return super.findByDocumentId(documentId);
+  }
+
+  override async create(data: Partial<ArticleFields>): Promise<ArticleFields> {
+    return super.create(data);
+  }
+
+  override async update(
+    id: number,
+    data: Partial<ArticleFields>,
+  ): Promise<ArticleFields | null> {
+    return super.update(id, data);
   }
 }

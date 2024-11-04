@@ -32,6 +32,15 @@ export class DatabaseService implements OnModuleInit {
       const articlesTable = new tables.ArticlesTable(this.knex, this.dbClient);
       await articlesTable.createTable();
 
+      const rolesTable = new tables.RolesTable(this.knex, this.dbClient);
+      await rolesTable.createTable();
+
+      const collectionsTable = new tables.CollectionsTable(
+        this.knex,
+        this.dbClient,
+      );
+      await collectionsTable.createTable();
+
       this.logger.log('Database initialization completed successfully');
     } catch (error) {
       this.logger.error('Failed to initialize database:', error.stack);

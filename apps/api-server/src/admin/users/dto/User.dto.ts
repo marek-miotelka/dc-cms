@@ -1,5 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import {
+  IsArray,
   IsEmail,
   IsNotEmpty,
   IsOptional,
@@ -7,10 +8,6 @@ import {
   IsStrongPassword,
 } from 'class-validator';
 
-/**
- * Data Transfer Object for creating a new user
- * Validates and documents the required fields
- */
 export class CreateUserDto {
   @ApiProperty({
     example: 'john@example.com',
@@ -68,12 +65,18 @@ export class CreateUserDto {
     },
   )
   password?: string;
+
+  @ApiProperty({
+    example: ['role1-document-id', 'role2-document-id'],
+    description: 'List of role document IDs to assign to the user',
+    required: true,
+  })
+  @IsArray({ message: 'Roles must be an array' })
+  @IsString({ each: true, message: 'Each role must be a string (documentId)' })
+  @IsNotEmpty({ message: 'At least one role is required' })
+  roleDocumentIds: string[];
 }
 
-/**
- * Data Transfer Object for updating an existing user
- * Makes all fields optional while maintaining validation rules
- */
 export class UpdateUserDto {
   @ApiProperty({
     example: 'john@example.com',
@@ -131,4 +134,14 @@ export class UpdateUserDto {
     },
   )
   password?: string;
+
+  @ApiProperty({
+    example: ['role1-document-id', 'role2-document-id'],
+    description: 'List of role document IDs to assign to the user',
+    required: false,
+  })
+  @IsOptional()
+  @IsArray({ message: 'Roles must be an array' })
+  @IsString({ each: true, message: 'Each role must be a string (documentId)' })
+  roleDocumentIds?: string[];
 }

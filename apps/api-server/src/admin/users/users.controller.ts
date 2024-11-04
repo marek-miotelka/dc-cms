@@ -6,7 +6,6 @@ import {
   HttpCode,
   HttpStatus,
   Param,
-  ParseIntPipe,
   Post,
   Put,
   UseGuards,
@@ -20,23 +19,23 @@ import {
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
-import { UserFields } from './models/User.model';
+import { SanitizedUser, UserModel } from './models/User.model';
 
 /**
  * Controller handling user-related HTTP requests
  * All routes require JWT authentication
  */
-@ApiTags('users')
+@ApiTags('admin/users')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
-@Controller('users')
-export class UsersController {
+@Controller('admin/users')
+export class AdminUsersController {
   constructor(private readonly usersService: AdminUsersService) {}
 
   /**
    * Creates a new user
    * @param createUserDto - The user data to create
-   * @returns Promise resolving to the created user
+   * @returns Promise resolving to the created sanitized user
    */
   @ApiOperation({ summary: 'Create a new user' })
   @ApiResponse({
@@ -45,13 +44,14 @@ export class UsersController {
     type: CreateUserDto,
   })
   @Post()
-  async create(@Body() createUserDto: CreateUserDto): Promise<UserFields> {
-    return this.usersService.createUser(createUserDto);
+  async create(@Body() createUserDto: CreateUserDto): Promise<SanitizedUser> {
+    const user = await this.usersService.createUser(createUserDto);
+    return UserModel.sanitize(user);
   }
 
   /**
    * Retrieves all users
-   * @returns Promise resolving to an array of users
+   * @returns Promise resolving to an array of sanitized users
    */
   @ApiOperation({ summary: 'Get all users' })
   @ApiResponse({
@@ -60,17 +60,18 @@ export class UsersController {
     type: [CreateUserDto],
   })
   @Get()
-  async findAll(): Promise<UserFields[]> {
-    return this.usersService.findAll();
+  async findAll(): Promise<SanitizedUser[]> {
+    const users = await this.usersService.findAll();
+    return users.map(UserModel.sanitize);
   }
 
   /**
-   * Retrieves a specific user by ID
-   * @param id - The ID of the user to retrieve
-   * @returns Promise resolving to the found user
+   * Retrieves a specific user by documentId
+   * @param documentId - The documentId of the user to retrieve
+   * @returns Promise resolving to the found sanitized user
    * @throws NotFoundException if user is not found
    */
-  @ApiOperation({ summary: 'Get user by ID' })
+  @ApiOperation({ summary: 'Get user by documentId' })
   @ApiResponse({
     status: 200,
     description: 'The found user',
@@ -80,19 +81,22 @@ export class UsersController {
     status: 404,
     description: 'User not found',
   })
-  @Get(':id')
-  async findOne(@Param('id', ParseIntPipe) id: number): Promise<UserFields> {
-    return this.usersService.findById(id);
+  @Get(':documentId')
+  async findOne(
+    @Param('documentId') documentId: string,
+  ): Promise<SanitizedUser> {
+    const user = await this.usersService.findByDocumentId(documentId);
+    return UserModel.sanitize(user);
   }
 
   /**
    * Updates an existing user
-   * @param id - The ID of the user to update
+   * @param documentId - The documentId of the user to update
    * @param updateUserDto - The updated user data
-   * @returns Promise resolving to the updated user
+   * @returns Promise resolving to the updated sanitized user
    * @throws NotFoundException if user is not found
    */
-  @ApiOperation({ summary: 'Update user by ID' })
+  @ApiOperation({ summary: 'Update user by documentId' })
   @ApiResponse({
     status: 200,
     description: 'The user has been successfully updated',
@@ -102,20 +106,22 @@ export class UsersController {
     status: 404,
     description: 'User not found',
   })
-  @Put(':id')
+  @Put(':documentId')
   async update(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('documentId') documentId: string,
     @Body() updateUserDto: UpdateUserDto,
-  ): Promise<UserFields> {
-    return this.usersService.update(id, updateUserDto);
+  ): Promise<SanitizedUser> {
+    const user = await this.usersService.findByDocumentId(documentId);
+    const updatedUser = await this.usersService.update(user.id, updateUserDto);
+    return UserModel.sanitize(updatedUser);
   }
 
   /**
    * Deletes a user
-   * @param id - The ID of the user to delete
+   * @param documentId - The documentId of the user to delete
    * @throws NotFoundException if user is not found
    */
-  @ApiOperation({ summary: 'Delete user by ID' })
+  @ApiOperation({ summary: 'Delete user by documentId' })
   @ApiResponse({
     status: 204,
     description: 'The user has been successfully deleted',
@@ -124,9 +130,10 @@ export class UsersController {
     status: 404,
     description: 'User not found',
   })
-  @Delete(':id')
+  @Delete(':documentId')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
-    await this.usersService.delete(id);
+  async remove(@Param('documentId') documentId: string): Promise<void> {
+    const user = await this.usersService.findByDocumentId(documentId);
+    await this.usersService.delete(user.id);
   }
 }

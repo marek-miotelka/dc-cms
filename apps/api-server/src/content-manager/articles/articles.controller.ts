@@ -6,7 +6,6 @@ import {
   HttpCode,
   HttpStatus,
   Param,
-  ParseIntPipe,
   Post,
   Put,
   UseGuards,
@@ -22,10 +21,6 @@ import {
 } from '@nestjs/swagger';
 import { ArticleFields } from './models/Article.model';
 
-/**
- * Controller handling article-related HTTP requests
- * All routes require JWT authentication
- */
 @ApiTags('articles')
 @ApiBearerAuth()
 @UseGuards(JwtAuthGuard)
@@ -33,11 +28,6 @@ import { ArticleFields } from './models/Article.model';
 export class ArticlesController {
   constructor(private readonly articlesService: ArticlesService) {}
 
-  /**
-   * Creates a new article
-   * @param createArticleDto - The article data to create
-   * @returns Promise resolving to the created article
-   */
   @ApiOperation({ summary: 'Create a new article' })
   @ApiResponse({
     status: 201,
@@ -51,10 +41,6 @@ export class ArticlesController {
     return this.articlesService.create(createArticleDto);
   }
 
-  /**
-   * Retrieves all articles
-   * @returns Promise resolving to an array of articles
-   */
   @ApiOperation({ summary: 'Get all articles' })
   @ApiResponse({
     status: 200,
@@ -66,13 +52,7 @@ export class ArticlesController {
     return this.articlesService.findAll();
   }
 
-  /**
-   * Retrieves a specific article by ID
-   * @param id - The ID of the article to retrieve
-   * @returns Promise resolving to the found article
-   * @throws NotFoundException if article is not found
-   */
-  @ApiOperation({ summary: 'Get article by ID' })
+  @ApiOperation({ summary: 'Get article by documentId' })
   @ApiResponse({
     status: 200,
     description: 'The found article',
@@ -82,19 +62,14 @@ export class ArticlesController {
     status: 404,
     description: 'Article not found',
   })
-  @Get(':id')
-  async findOne(@Param('id', ParseIntPipe) id: number): Promise<ArticleFields> {
-    return this.articlesService.findById(id);
+  @Get(':documentId')
+  async findOne(
+    @Param('documentId') documentId: string,
+  ): Promise<ArticleFields> {
+    return this.articlesService.findByDocumentId(documentId);
   }
 
-  /**
-   * Updates an existing article
-   * @param id - The ID of the article to update
-   * @param updateArticleDto - The updated article data
-   * @returns Promise resolving to the updated article
-   * @throws NotFoundException if article is not found
-   */
-  @ApiOperation({ summary: 'Update article by ID' })
+  @ApiOperation({ summary: 'Update article by documentId' })
   @ApiResponse({
     status: 200,
     description: 'The article has been successfully updated',
@@ -104,20 +79,16 @@ export class ArticlesController {
     status: 404,
     description: 'Article not found',
   })
-  @Put(':id')
+  @Put(':documentId')
   async update(
-    @Param('id', ParseIntPipe) id: number,
+    @Param('documentId') documentId: string,
     @Body() updateArticleDto: UpdateArticleDto,
   ): Promise<ArticleFields> {
-    return this.articlesService.update(id, updateArticleDto);
+    const article = await this.articlesService.findByDocumentId(documentId);
+    return this.articlesService.update(article.id, updateArticleDto);
   }
 
-  /**
-   * Deletes an article
-   * @param id - The ID of the article to delete
-   * @throws NotFoundException if article is not found
-   */
-  @ApiOperation({ summary: 'Delete article by ID' })
+  @ApiOperation({ summary: 'Delete article by documentId' })
   @ApiResponse({
     status: 204,
     description: 'The article has been successfully deleted',
@@ -126,9 +97,10 @@ export class ArticlesController {
     status: 404,
     description: 'Article not found',
   })
-  @Delete(':id')
+  @Delete(':documentId')
   @HttpCode(HttpStatus.NO_CONTENT)
-  async remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
-    await this.articlesService.delete(id);
+  async remove(@Param('documentId') documentId: string): Promise<void> {
+    const article = await this.articlesService.findByDocumentId(documentId);
+    await this.articlesService.delete(article.id);
   }
 }

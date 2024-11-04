@@ -29,7 +29,10 @@ import { DatabaseService } from './database.service';
       },
     },
     DatabaseService,
-    CrudService,
+    {
+      provide: CrudService,
+      useValue: CrudService,
+    },
   ],
   exports: ['KNEX_CONNECTION', CrudService],
 })

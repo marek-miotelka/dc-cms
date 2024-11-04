@@ -13,7 +13,7 @@ export interface BaseModelOptions {
   knex: Knex;
 }
 
-export class BaseModel {
+export abstract class BaseModel<T extends BaseModelFields> {
   protected tableName: string;
   protected knex: Knex;
 
@@ -24,7 +24,7 @@ export class BaseModel {
 
   protected getBaseFields(): Partial<BaseModelFields> {
     return {
-      documentId: uuidv4(),
+      documentId: this.generateUuid(),
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -36,15 +36,23 @@ export class BaseModel {
     };
   }
 
-  async findById<T>(id: number): Promise<T | undefined> {
-    return this.knex(this.tableName).where('id', id).first();
+  protected generateUuid(): string {
+    return uuidv4();
   }
 
-  async findByDocumentId<T>(documentId: string): Promise<T | undefined> {
-    return this.knex(this.tableName).where('documentId', documentId).first();
+  async findById(id: number): Promise<T | null> {
+    const result = await this.knex(this.tableName).where('id', id).first();
+    return result || null;
   }
 
-  async create<T extends object>(data: Partial<T>): Promise<T> {
+  async findByDocumentId(documentId: string): Promise<T | null> {
+    const result = await this.knex(this.tableName)
+      .where('documentId', documentId)
+      .first();
+    return result || null;
+  }
+
+  async create(data: Partial<T>): Promise<T> {
     const [id] = await this.knex(this.tableName)
       .insert({
         ...data,
@@ -52,13 +60,14 @@ export class BaseModel {
       })
       .returning('id');
 
-    return (await this.findById<T>(id)) as Promise<T>;
+    const result = await this.findById(id);
+    if (!result) {
+      throw new Error('Failed to create record');
+    }
+    return result;
   }
 
-  async update<T extends object>(
-    id: number,
-    data: Partial<T>,
-  ): Promise<T | undefined> {
+  async update(id: number, data: Partial<T>): Promise<T | null> {
     await this.knex(this.tableName)
       .where('id', id)
       .update({
@@ -66,7 +75,7 @@ export class BaseModel {
         ...this.updateTimestamp(),
       });
 
-    return this.findById<T>(id);
+    return this.findById(id);
   }
 
   async delete(id: number): Promise<boolean> {
@@ -77,4 +86,6 @@ export class BaseModel {
   protected query(): Knex.QueryBuilder {
     return this.knex(this.tableName);
   }
+
+  abstract findAll(): Promise<T[]>;
 }

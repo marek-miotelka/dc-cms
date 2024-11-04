@@ -2,15 +2,15 @@ import { BaseModel, BaseModelFields } from './base.model';
 import { Injectable, NotFoundException } from '@nestjs/common';
 
 @Injectable()
-export class CrudService<T extends BaseModelFields> {
-  protected model: BaseModel;
+export abstract class CrudService<T extends BaseModelFields> {
+  protected model!: BaseModel<T>;
 
-  setModel(model: BaseModel) {
+  setModel(model: BaseModel<T>) {
     this.model = model;
   }
 
   async findById(id: number): Promise<T> {
-    const result = await this.model.findById<T>(id);
+    const result = await this.model.findById(id);
     if (!result) {
       throw new NotFoundException(`Entity with id ${id} not found`);
     }
@@ -18,7 +18,7 @@ export class CrudService<T extends BaseModelFields> {
   }
 
   async findByDocumentId(documentId: string): Promise<T> {
-    const result = await this.model.findByDocumentId<T>(documentId);
+    const result = await this.model.findByDocumentId(documentId);
     if (!result) {
       throw new NotFoundException(
         `Entity with documentId ${documentId} not found`,
@@ -29,11 +29,7 @@ export class CrudService<T extends BaseModelFields> {
 
   async create(data: Partial<T>): Promise<T> {
     try {
-      const result = await this.model.create<T>(data);
-      if (!result) {
-        throw new Error('Failed to create entity');
-      }
-      return result;
+      return await this.model.create(data);
     } catch (error) {
       throw new Error(`Failed to create entity: ${error.message}`);
     }
@@ -44,7 +40,7 @@ export class CrudService<T extends BaseModelFields> {
       // Check if entity exists
       await this.findById(id);
 
-      const result = await this.model.update<T>(id, data);
+      const result = await this.model.update(id, data);
       if (!result) {
         throw new Error('Failed to update entity');
       }

@@ -1,10 +1,16 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class AuthJwtUser {
-  @ApiProperty({ example: 1, description: 'Unique identifier of the user' })
-  id: number;
+  @ApiProperty({
+    example: 'abc-123',
+    description: 'Unique document identifier of the user',
+  })
+  documentId: string;
 
-  @ApiProperty({ example: 'john@example.com', description: 'Email address of the user' })
+  @ApiProperty({
+    example: 'john@example.com',
+    description: 'Email address of the user',
+  })
   email: string;
 
   @ApiProperty({ example: 'john', description: 'Username of the user' })
@@ -12,21 +18,21 @@ export class AuthJwtUser {
 }
 
 export class AuthSignJwtResponse {
-  @ApiProperty({ 
-    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...', 
-    description: 'JWT access token' 
+  @ApiProperty({
+    example: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+    description: 'JWT access token',
   })
   accessToken: string;
 
-  @ApiProperty({ 
-    example: 1698512400, 
-    description: 'Token expiration timestamp' 
+  @ApiProperty({
+    example: 1698512400,
+    description: 'Token expiration timestamp',
   })
   expiresAt: number;
 
-  @ApiProperty({ 
+  @ApiProperty({
     description: 'Authenticated user information',
-    type: AuthJwtUser 
+    type: AuthJwtUser,
   })
   user: AuthJwtUser;
 }

@@ -23,38 +23,18 @@ export class AdminUsersService
     this.setModel(this.userModel);
   }
 
-  /**
-   * Retrieves all users from the database
-   * @returns Promise resolving to an array of users
-   */
   async findAll(): Promise<UserFields[]> {
     return this.userModel.findAll();
   }
 
-  /**
-   * Find user by email or username
-   * @param identifier - Email or username to search for
-   * @returns Promise resolving to user if found, null otherwise
-   */
   async findOne(identifier: string): Promise<UserFields | null> {
     return this.userModel.findByIdentifier(identifier);
   }
 
-  /**
-   * Find user by email address
-   * @param email - Email to search for
-   * @returns Promise resolving to user if found, null otherwise
-   */
   async findByEmail(email: string): Promise<UserFields | null> {
     return this.userModel.findByEmail(email);
   }
 
-  /**
-   * Find user by authentication provider
-   * @param provider - Authentication provider (e.g., 'google')
-   * @param providerId - Provider-specific user ID
-   * @returns Promise resolving to user if found, null otherwise
-   */
   async findByProvider(
     provider: AuthProvider,
     providerId: string,
@@ -62,25 +42,72 @@ export class AdminUsersService
     return this.userModel.findByProvider(provider, providerId);
   }
 
-  /**
-   * Create new user with password hashing if provided
-   * @param userData - User data to create
-   * @returns Promise resolving to created user
-   */
   async createUser(userData: Partial<UserFields>): Promise<UserFields> {
-    if (userData.password) {
-      userData.password = await this.hashPassword(userData.password);
+    const { roleDocumentIds, ...userDataWithoutRoles } =
+      userData as Partial<UserFields> & { roleDocumentIds?: string[] };
+
+    if (userDataWithoutRoles.password) {
+      userDataWithoutRoles.password = await this.hashPassword(
+        userDataWithoutRoles.password,
+      );
     }
 
-    return this.create(userData);
+    const user = await this.create(userDataWithoutRoles);
+
+    if (roleDocumentIds?.length) {
+      const roles = await this.knex('roles')
+        .whereIn('documentId', roleDocumentIds)
+        .select('id');
+
+      await Promise.all(
+        roles.map((role) =>
+          this.knex('user_roles').insert({
+            userId: user.id,
+            roleId: role.id,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }),
+        ),
+      );
+
+      return this.findById(user.id);
+    }
+
+    return user;
   }
 
-  /**
-   * Validate password against stored hash
-   * @param plainPassword - Password to validate
-   * @param hashedPassword - Stored password hash
-   * @returns Promise resolving to boolean indicating if password is valid
-   */
+  async update(id: number, userData: Partial<UserFields>): Promise<UserFields> {
+    const { roleDocumentIds, ...userDataWithoutRoles } =
+      userData as Partial<UserFields> & { roleDocumentIds?: string[] };
+
+    if (userDataWithoutRoles.password) {
+      userDataWithoutRoles.password = await this.hashPassword(
+        userDataWithoutRoles.password,
+      );
+    }
+
+    if (roleDocumentIds?.length) {
+      const roles = await this.knex('roles')
+        .whereIn('documentId', roleDocumentIds)
+        .select('id');
+
+      await this.knex('user_roles').where('userId', id).delete();
+
+      await Promise.all(
+        roles.map((role) =>
+          this.knex('user_roles').insert({
+            userId: id,
+            roleId: role.id,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }),
+        ),
+      );
+    }
+
+    return super.update(id, userDataWithoutRoles);
+  }
+
   async validatePassword(
     plainPassword: string,
     hashedPassword: string,
@@ -88,11 +115,6 @@ export class AdminUsersService
     return bcrypt.compare(plainPassword, hashedPassword);
   }
 
-  /**
-   * Hash password for storage
-   * @param password - Plain text password to hash
-   * @returns Promise resolving to hashed password
-   */
   async hashPassword(password: string): Promise<string> {
     return bcrypt.hash(password, 10);
   }

@@ -17,21 +17,16 @@ export class GoogleStrategyService {
   async findOrCreateFromGoogle(profile: GoogleProfile) {
     const email = profile.emails[0]?.value;
 
-    // First try to find user by Google provider ID
     let user = await this.usersService.findByProvider('google', profile.id);
 
-    // If not found by provider ID, try to find by email
     if (!user) {
       user = await this.usersService.findByEmail(email);
 
-      // Security measure: Don't automatically link existing accounts
-      // Prevents account takeover through email matching
       if (user) {
         return null;
       }
     }
 
-    // Create new user if none exists
     if (!user) {
       user = await this.usersService.createUser({
         username: email.split('@')[0],
@@ -55,7 +50,7 @@ export class GoogleStrategyService {
     }
 
     return {
-      id: user.id,
+      documentId: user.documentId,
       email: user.email,
       username: user.username,
     };
