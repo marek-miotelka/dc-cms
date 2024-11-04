@@ -4,17 +4,17 @@ import { AppService } from './app.service';
 import { ConfigModule } from '@nestjs/config';
 import { AuthModule } from './auth/auth.module';
 import { AdminModule } from './admin/admin.module';
-import appConfig from '@api-server/config/app.config';
-import jwtConfig from '@api-server/config/jwt.config';
-import providersConfig from '@api-server/config/providers.config';
+import config from '@api-server/config';
+import { DatabaseModule } from '@api-server/database/database.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       cache: true,
-      load: [appConfig, jwtConfig, providersConfig],
+      load: config,
     }),
+    DatabaseModule,
     AuthModule,
     AdminModule,
   ],

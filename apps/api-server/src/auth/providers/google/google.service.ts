@@ -7,10 +7,6 @@ import {
 } from '@api-server/auth/jwt/models/AuthJwt.model';
 import { GoogleProfile } from './models/GoogleProfile.model';
 
-/**
- * Service handling Google OAuth2 authentication logic
- * Manages user creation, validation, and JWT token generation
- */
 @Injectable()
 export class GoogleStrategyService {
   constructor(
@@ -18,18 +14,13 @@ export class GoogleStrategyService {
     private readonly usersService: AdminUsersService,
   ) {}
 
-  /**
-   * Find existing user or create new one from Google profile
-   * Handles account linking and creation logic
-   * @param profile - Google OAuth2 profile data
-   */
   async findOrCreateFromGoogle(profile: GoogleProfile) {
     const email = profile.emails[0]?.value;
 
-    // First try to find user by Google ID
-    let user = await this.usersService.findByGoogleId(profile.id);
+    // First try to find user by Google provider ID
+    let user = await this.usersService.findByProvider('google', profile.id);
 
-    // If not found by Google ID, try to find by email
+    // If not found by provider ID, try to find by email
     if (!user) {
       user = await this.usersService.findByEmail(email);
 
@@ -45,20 +36,17 @@ export class GoogleStrategyService {
       user = await this.usersService.createUser({
         username: email.split('@')[0],
         email,
-        googleId: profile.id,
-        displayName: profile.displayName,
-        photoUrl: profile.photos[0]?.value,
+        name: profile.name.givenName,
+        lastname: profile.name.familyName,
+        providerIds: {
+          google: profile.id,
+        },
       });
     }
 
     return user;
   }
 
-  /**
-   * Validate Google user and prepare JWT payload
-   * @param profile - Google OAuth2 profile
-   * @returns JWT user payload
-   */
   async validateUser(profile: GoogleProfile): Promise<AuthJwtUser> {
     const user = await this.findOrCreateFromGoogle(profile);
 
@@ -73,11 +61,6 @@ export class GoogleStrategyService {
     };
   }
 
-  /**
-   * Generate JWT token for authenticated Google user
-   * @param user - Validated user data
-   * @returns JWT token and user information
-   */
   async signIn(user: AuthJwtUser): Promise<AuthSignJwtResponse> {
     return this.authJwtService.sign(user);
   }
