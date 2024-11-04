@@ -9,7 +9,7 @@ import { Knex } from 'knex';
  * @implements OnModuleInit - Handles initialization of the article model
  */
 @Injectable()
-export class AdminArticlesService
+export class ArticlesService
   extends CrudService<ArticleFields>
   implements OnModuleInit
 {

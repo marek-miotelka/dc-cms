@@ -11,7 +11,7 @@ import {
   Put,
   UseGuards,
 } from '@nestjs/common';
-import { AdminArticlesService } from './articles.service';
+import { ArticlesService } from './articles.service';
 import { CreateArticleDto, UpdateArticleDto } from './dto/Article.dto';
 import { JwtAuthGuard } from '@api-server/auth/jwt/jwt.guard';
 import {
@@ -31,7 +31,7 @@ import { ArticleFields } from './models/Article.model';
 @UseGuards(JwtAuthGuard)
 @Controller('articles')
 export class ArticlesController {
-  constructor(private readonly articlesService: AdminArticlesService) {}
+  constructor(private readonly articlesService: ArticlesService) {}
 
   /**
    * Creates a new article

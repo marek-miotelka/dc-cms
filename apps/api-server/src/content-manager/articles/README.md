@@ -92,7 +92,7 @@ Extends CreateArticleDto with the same fields.
 
 ### Services
 
-The `AdminArticlesService` extends the base `CrudService` and provides:
+The `ArticlesService` extends the base `CrudService` and provides:
 - Basic CRUD operations
 - Custom find methods (findByName, findAll)
 - Database integration via Knex.js

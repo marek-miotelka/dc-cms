@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module';
 import { AdminModule } from './admin/admin.module';
 import config from '@api-server/config';
 import { DatabaseModule } from '@api-server/database/database.module';
+import { ContentManagerModule } from '@api-server/content-manager/content-manager.module';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { DatabaseModule } from '@api-server/database/database.module';
     DatabaseModule,
     AuthModule,
     AdminModule,
+    ContentManagerModule,
   ],
   controllers: [AppController],
   providers: [AppService],
