@@ -1,0 +1,20 @@
+{
+  "name": "distcode-cms",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "dotenvx run -- pnpm run --parallel dev",
+    "build:api-server": "dotenvx run -- pnpm --filter api-server build",
+    "build:admin-web": "dotenvx run -- pnpm --filter admin-web build",
+    "start:api-server": "dotenvx run -- pnpm --filter api-server start:prod",
+    "start:admin-web": "dotenvx run -- pnpm --filter admin-web start"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@dotenvx/dotenvx": "^1.21.1"
+  }
+}
+
